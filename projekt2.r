@@ -31,18 +31,17 @@ check_stability <- function(dt, sigma, I, ds, a, b){
     }
   }
 
-
-maximal_stable <- function(logical = c(FALSE,FALSE), I, a , b, sigma ){
-  wynik <- c()
-  if (logical[1] == FALSE){
-    dt <- 1/((sigma^2)*(I^2))
-    wynik <- c(wynik, dt)
-  }
-  if( logical[2] == FALSE){
-    ds <-2*a/abs(b) 
-    wynik <- c(wynik, ds)
-  }
-  return(wynik)  }
+#S - max S
+maximal_stable <- function(S, a , b, sigma )
+{
+  # a <- a * S^2
+  # b <- b * S
+  # ds <- 2 * a / abs(b) 
+  ds <- 10
+  I <- ceiling(S/ds)
+  dt <- 1 / (sigma^2 * I^2)
+  wynik <- c(ds, dt)
+}
 
 create_grid <- function(indeks, dS, dt, T, B, typ, K = 0)
 {
@@ -121,51 +120,43 @@ K <- 2150
 bariera <- 2400
 dni <- 251
 
-stabilnosc <- check_stability(dt = dt, ds = dS, sigma = sigma, a =a , b= b , I = 3*K)
-if(!(stabilnosc[1] == TRUE && stabilnosc[2] == TRUE)){
-stabilne <- maximal_stable(stabilnosc[1:2], I = 3*2510, a = a, b= b , sigma = sigma)
-if( ! stabilnosc[1]){
-  dt <- stabilne[1]
-}
-if(!stabilnosc[2]){
-  dS <- stabilne[2]
-}
-}
 
+stabilne <- maximal_stable(S = 3*K, a = a, b= b , sigma = sigma)
+dS <- stabilne[1]
+dt <- stabilne[2]
 
 #CALL
 typ_opcji <- "call"
 #grid <- create_grid(indeks = wig20_2020, dS = dS, dt = dt, T = T, B = bariera, typ = typ_opcji)
 
-vS <- seq(0, 3*K, by = dS)
+vS <- seq(bariera, 0, by = -dS)
 vt <- seq(0, 1, by = (1/dni))
-payoff <- payoff(S = vS, K = K, B = bariera, typ = typ_opcji)
-grid <- list(grid = payoff, time = vt, indeks = vS)
+p <- payoff(S = vS, K = K, B = bariera, typ = typ_opcji)
+grid <- list(grid = p, time = vt, indeks = vS)
 
 k <- 1/dt + 1
 
-new_row <- payoff
+new_row <- p
 while (k >= 1)
 {
   current_row <- new_row
-  for(i in (length(grid$indeks)-1):1) #dodalem bez 2400, bo tam cena opcji jest 0 (w callu)
+  for(i in length(grid$indeks):1) #dodalem bez 2400, bo tam cena opcji jest 0 (w callu)
   {
     if(i == length(grid$indeks) | i == 1)
       {
       if(i == length(grid$indeks))
       {
-       new_row[i] <- value_option_boundary(a = a, b = b, c = c, v1 = current_row[i - 1], v2 = current_row[i], v3 = current_row[i - 2], dS = dS, dt = dt, S = grid$indeks[i], is_max = T) * (1+r)^(-dt)
+       new_row[i] <- value_option_boundary(a = a, b = b, c = c, v1 = current_row[i - 1], v2 = current_row[i], v3 = current_row[i - 2], dS = dS, dt = dt, S = grid$indeks[i], is_max = T) 
       } else {
-        new_row[i] <- value_option_boundary(a = a, b = b, c = c, v1 = current_row[i + 2], v2 =current_row[i ], v3 = current_row[i + 1], dS = dS, dt = dt, S = grid$indeks[i], is_max = F) * (1+r)^(-dt)}
+        new_row[i] <- value_option_boundary(a = a, b = b, c = c, v1 = current_row[i + 2], v2 =current_row[i ], v3 = current_row[i + 1], dS = dS, dt = dt, S = grid$indeks[i], is_max = F) }
       } else {
-        new_row[i] <- value_option_central(a = a, b = b, c = c, v1 = current_row[i - 1], v2 = current_row[i], v3 = current_row[i + 1], dS = dS, dt = dt, S = grid$indeks[i]) * (1+r)^(-dt)
+        new_row[i] <- value_option_central(a = a, b = b, c = c, v1 = current_row[i - 1], v2 = current_row[i], v3 = current_row[i + 1], dS = dS, dt = dt, S = grid$indeks[i])
       }
   }
-  if(( k*dt %% (1/dni)) == 0){
-    grid$grid <- cbind(grid$grid, new_row, deparse.level = 0)
-    print(k)
-  }
+  grid$grid <- cbind(new_row, grid$grid, deparse.level = 0)
+  print(k)
   k <- k-1
+  print(k)
 }
 View(grid$grid)
 
