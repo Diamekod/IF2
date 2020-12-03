@@ -124,6 +124,7 @@ dS <- stabilne[1]
 dt <- stabilne[2]
 
 #---- Warunki pocz
+T <- 0.83
 dS <- 10
 sigma <- 0.18
 r <- 0.01
@@ -145,7 +146,7 @@ typ_opcji <- "call"
 #grid <- create_grid(indeks = wig20_2020, dS = dS, dt = dt, T = T, B = bariera, typ = typ_opcji)
 
 
-simulate_FD <- function(dS, dni, K, bariera, call = TRUE, sigma, r, lower, upper)
+simulate_FD <- function(dS, T, K, bariera, call = TRUE, sigma, r, lower, upper)
 {
   a <- 1/2*sigma^2
   b <- r
@@ -154,13 +155,13 @@ simulate_FD <- function(dS, dni, K, bariera, call = TRUE, sigma, r, lower, upper
   I <- length(vS)
   dt <- 1/((sigma^2)*(I^2))
   print(dt)
-  vt <- seq(0, dni, by = 1)
+  vt <- seq(0, T, by = dt)
   p <- sapply(vS, payoff, K = K, B = bariera, call = call)
   grid <- list(grid = p, time = vt, indeks = vS)
   
   
   
-  k <- floor((dni/251)/dt)
+  k <- floor(T/dt)
 
   new_row <- p
   while (k >= 1)
