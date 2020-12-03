@@ -1,12 +1,16 @@
 #projekt2
 library(lubridate)
 library(dplyr)
+library(plotly)
 setwd(".")
 wig20 <- read.csv("wig20.csv")
 wig20_2020 <- wig20 %>% filter(year(Data) == "2020")
 
-T <- 1
-dt <- 1/nrow(wig20_2020 %>% filter(as.Date(Data) <= "2020-09-30"))
+
+
+
+delta = function(v, dS) (v[1] - v[3]) / (2 * dS)
+gamma = function(v, dS) (v[1] - 2 * v[2] + v[3])  / dS^2
 
 
 ##---- I - naszagórna granica siatki
@@ -62,12 +66,12 @@ create_grid <- function(indeks, dS, dt, T, B, typ, K = 0)
   list(grid = m, time = vt, indeks = vS)
 }
 
-payoff <- function(S, K, B, typ)
+payoff <- function(S, K, B, call = TRUE)
 {
   #S cena kursu
   #K cena wykonania
   #B bariera
-  if(typ == "call")
+  if(call == TRUE)
   {
   cond <- S>=B
   S <- pmax(S - K,0)
@@ -82,21 +86,25 @@ payoff <- function(S, K, B, typ)
 
 
 
-value_option_central <- function(a, b, c, v1, v2, v3, dS, dt, S)
+value_option_central <- function(a, b, c, v, dS, dt, S)
 {
   #funkcja liczy cenê opcji dla ceny i w chwili k+1, kiedy wartoœci v1, v2, v3 s¹ niepuste
   #v1 - cena opcji dla ceny i - 1 w chwili k
   #v2 - cena opcji dla ceny i w chwili k
   #v3 - cena opcji dla ceny i + 1 w chwili k
   #tutaj k + 1 jest wczeœniej ni¿ k XD
+  d = delta(v, dS)
+  g = gamma(v, dS)
   a <- a * S^2
   b <- b * S
-  v <- v2 + a * dt / dS^2 * (v3 - 2 * v2 + v1) + b * dt / (2 * dS) * (v3 - v1) + c * v2 * dt
-  v
+  v <- (v[2] + (a * g + b*d +c * v[2])*dt)
+  return(v)
 }
 
 value_option_boundary <- function(a, b, c, v1, v2, v3, dS, dt, S, is_max)
 {
+  d = delta(v, dS)
+  g = gamma(v, dS)
   a <- a * S^2
   b <- b * S
   if(is_max == T)
@@ -110,54 +118,73 @@ value_option_boundary <- function(a, b, c, v1, v2, v3, dS, dt, S, is_max)
   v
 }
 
-dS <- 10
-sigma <- 0.18
-r <- 0.01
-a <- 1/2*sigma^2
-b <- r
-c <- -r
-K <- 2150
-bariera <- 2400
-dni <- 251
-
 
 stabilne <- maximal_stable(S = 3*K, a = a, b= b , sigma = sigma)
 dS <- stabilne[1]
 dt <- stabilne[2]
 
+#---- Warunki pocz
+dS <- 10
+sigma <- 0.18
+r <- 0.01
+K <- 2150
+bariera <- 2400
+dni <- 30
+
+
+#--- brzegi
+lower <- function(k){
+  return(0)
+}
+
+upper <- function(k){
+  return(0)
+}
 #CALL
 typ_opcji <- "call"
 #grid <- create_grid(indeks = wig20_2020, dS = dS, dt = dt, T = T, B = bariera, typ = typ_opcji)
 
-vS <- seq(bariera, 0, by = -dS)
-vt <- seq(0, 1, by = (1/dni))
-p <- payoff(S = vS, K = K, B = bariera, typ = typ_opcji)
-grid <- list(grid = p, time = vt, indeks = vS)
 
-k <- 1/dt + 1
-
-new_row <- p
-while (k >= 1)
+simulate_FD <- function(dS, dni, K, bariera, call = TRUE, sigma, r, lower, upper)
 {
-  current_row <- new_row
-  for(i in length(grid$indeks):1) #dodalem bez 2400, bo tam cena opcji jest 0 (w callu)
+  a <- 1/2*sigma^2
+  b <- r
+  c <- -1*r
+  vS <- seq(bariera, 0, by = -dS)
+  I <- length(vS)
+  dt <- 1/((sigma^2)*(I^2))
+  print(dt)
+  vt <- seq(0, dni, by = 1)
+  p <- sapply(vS, payoff, K = K, B = bariera, call = call)
+  grid <- list(grid = p, time = vt, indeks = vS)
+  
+  
+  
+  k <- floor((dni/251)/dt)
+
+  new_row <- p
+  while (k >= 1)
   {
-    if(i == length(grid$indeks) | i == 1)
+    
+    current_row <- new_row
+    for(i in (I-1):2) #dodalem bez 2400, bo tam cena opcji jest 0 (w callu)
       {
-      if(i == length(grid$indeks))
-      {
-       new_row[i] <- value_option_boundary(a = a, b = b, c = c, v1 = current_row[i - 1], v2 = current_row[i], v3 = current_row[i - 2], dS = dS, dt = dt, S = grid$indeks[i], is_max = T) 
-      } else {
-        new_row[i] <- value_option_boundary(a = a, b = b, c = c, v1 = current_row[i + 2], v2 =current_row[i ], v3 = current_row[i + 1], dS = dS, dt = dt, S = grid$indeks[i], is_max = F) }
-      } else {
-        new_row[i] <- value_option_central(a = a, b = b, c = c, v1 = current_row[i - 1], v2 = current_row[i], v3 = current_row[i + 1], dS = dS, dt = dt, S = grid$indeks[i])
+        new_row[i] <- value_option_central(a = a, b = b, c = c, v = current_row[i+1:i-1], dS = dS, dt = dt, S = grid$indeks[i])
       }
+    new_row[1] <- lower(k)
+    new_row[I] <- upper(k)
+    grid$grid <- cbind(grid$grid, new_row, deparse.level = 0)
+    print(k)
+    k <- k-1
+    
   }
-  grid$grid <- cbind(new_row, grid$grid, deparse.level = 0)
-  print(k)
-  k <- k-1
-  print(k)
+  return(grid)
 }
-View(grid$grid)
 
+boczki <- simulate_FD(dS = dS, dni = dni, K = K , bariera = bariera, sigma = sigma, r = r, lower = lower, upper = upper)
+View(boczki$grid)
 
+fig <- plot_ly(z = ~boczki$grid)
+fig <- fig %>% add_surface()
+
+fig
