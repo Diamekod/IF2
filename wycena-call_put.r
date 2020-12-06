@@ -94,42 +94,85 @@ to_df_dywidendy <- function(result, dt, kwotowa = T, dywidenda, kiedy)
   data.frame(S = S, t = rep(seq(0, 0.837, dt), rep(nrow(result), ncol(result))), option_value = as.vector(result))
   
 }
+
+
+
+cena_opcji<- function(df_wynik, K, r, sigma, czy_put = F, bariera)
+{
+  
+  type <- ifelse(czy_put, "pdo", "cuo")
+  df <- data.frame(S = 0, t = 0, option_value = 0)
+  for(j in sort(unique(df_wynik$t)))
+  {
+    for(i in sort(unique(df_wynik$S)))
+    {
+      
+      df <- rbind(df, c(i, j, StandardBarrierOption(TypeFlag = type, S = i, X = K, H = bariera, r = r, sigma = sigma, K = 0, Time = 0.837 - j, b = 0)@price))
+    }
+  }
+  df$option_value[is.na(df$option_value)] <- 0 #dla ceny akcji == 0
+  df[-1,]
+}
+
+###################################
+#CALL##############################
+###################################
+library(fExoticOptions)
 dS <- 50
 zmiennosc_roczna <- 0.2
 bariera <- 2400
 K <- 2150
 r <- 0.01
-#dla EC bariera
+
+
 dt <- 1/(zmiennosc_roczna^2*ceiling(bariera/dS)^2)
 
 #europejska
 wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
 #zrobilem funkcje, ktora zamienia wynik na df, nie wiem czy potrzeba
 df_wynik <- to_df(wynik, dt)
-
+df_wynik_BSM <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_roczna, bariera = bariera)
+#MSE
+mean((df_wynik$option_value-df_wynik_BSM$option_value)^2)/nrow(df_wynik)
 
 library(rgl)
 
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
+plot3d(y = df_wynik_BSM$S, x = df_wynik_BSM$t, z = df_wynik_BSM$option_value)
+
+
 
 #amerykanska
 wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
 df_wynik <- to_df(wynik, dt)
+
+#DLA AMERYKANSKIEJ NIE MAM POROWNANIA, TRZEBA POSZUKAC
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
-#PUT
+
+
+
+
+###################################
+#PUT##############################
+###################################
 bariera <- 1900
 #dla EP 3*k
 dt <- 1/(zmiennosc_roczna^2*ceiling(K * 3/dS)^2)
 
 wynik = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
 df_wynik <- to_df(wynik, dt)
+df_wynik_BSM <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_roczna, bariera = bariera, czy_put = T)
+mean((df_wynik$option_value-df_wynik_BSM$option_value)^2)/nrow(df_wynik)
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
 
 
 #amerykanska
 wynik = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
 df_wynik <- to_df(wynik, dt)
+
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
+plot3d(y = df_wynik_BSM$S, x = df_wynik_BSM$t, z = df_wynik_BSM$option_value)
+
 
 
 
