@@ -1,0 +1,143 @@
+pay_off = function(S, K, czy_call = T) if(czy_call) pmax(S - K, 0) else pmax(K - S, 0)
+
+delta = function(v, dS) (v[1] - v[3]) / (2 * dS)
+gamma = function(v, dS) (v[1] - 2 * v[2] + v[3])  / dS^2
+
+wycena = function(v, dt, dS, S, r, zmiennosc_roczna){
+  d = delta(v, dS)
+  g = gamma(v, dS)
+  if (length(zmiennosc_roczna) != 1){
+    if (g < 0) zmiennosc_roczna = zmiennosc_roczna[1]
+    else zmiennosc_roczna = zmiennosc_roczna[2]
+  }
+  a = zmiennosc_roczna^2 * S^2 / 2
+  b = r * S
+  c = -r
+  return(v[2] + (a * g + b * d + c * v[2]) * dt)
+}
+
+#wycena(c(5,0,0), 0.0001, 5, 2149, 0.015, c(0.15,0.25))
+#wycena(c(0,2399,2398), 0.01, 1, 2399, 0.015, 0.2)
+
+
+
+finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = F)
+{
+  zmiennosc_roczna_vec <- zmiennosc_roczna
+  V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[1])
+  S_v = seq(0, bariera, dS)
+  t_v = seq(0, t, dt)
+  n_S = length(S_v)
+  n_t = length(t_v)
+  siatka = matrix(0, n_S, n_t)
+  siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = T)
+  siatka[n_S, n_t] = 0
+  for (j in (n_t - 1):1) {
+    for (i in (n_S - 1):2) {
+      if(niepewnosc)
+      {
+        zmiennosc_roczna[1] <- ifelse(gamma(siatka[(i + 1):(i - 1), j + 1], S_v[i])>0, zmiennosc_roczna_vec[1], zmiennosc_roczna_vec[2])
+        V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[1])
+      }
+      siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K)))
+      if (sum(siatka[i:(i + 1), j + 1]) == 0) break
+    }
+  }
+  row.names(siatka) = S_v
+  return(siatka)
+}
+
+
+finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = F){
+  V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)
+  
+  S_v = seq(bariera, K * 3, dS) #chyba cena wykonania * 3 miaa byæ
+  t_v = seq(0, t, dt)
+  n_S = length(S_v)
+  n_t = length(t_v)
+  siatka = matrix(0, n_S, n_t)
+  siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = F)
+  siatka[1, n_t] = 0
+  for (j in (n_t - 1):1) {
+    for (i in (2:(n_S - 1))) {
+      if(niepewnosc)
+      {
+        zmiennosc_roczna[1] <- ifelse(gamma(siatka[(i + 1):(i - 1), j + 1], S_v[i])>0, zmiennosc_roczna_vec[1], zmiennosc_roczna_vec[2])
+        V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[1])
+      }
+      siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K, czy_call = F)))
+      
+      if (sum(siatka[i:(i+1), j + 1]) == 0) break
+    }
+  }
+  row.names(siatka) = S_v
+  return(siatka)
+}
+
+to_df <- function(result, dt)
+{
+  data.frame(S = rep(as.numeric(row.names(result)), times = ncol(result)), t = rep(seq(0, 0.837, dt), rep(nrow(result), ncol(result))), option_value = as.vector(result))
+}
+
+to_df_dywidendy <- function(result, dt, kwotowa = T, dywidenda, kiedy)
+{
+  t <- seq(0, 0.837, dt)
+  ile <- max(which(t < kiedy))
+  if(kwotowa)
+  {
+    S <- c(rep(as.numeric(row.names(result)) + dywidenda, times = ile), rep(as.numeric(row.names(result)), times = ncol(result) - ile))
+    
+  } else {
+    S <- c(rep(as.numeric(row.names(result))/(1-dywidenda), times = ile), rep(as.numeric(row.names(result)), times = ncol(result) - ile))
+    
+  }
+  data.frame(S = S, t = rep(seq(0, 0.837, dt), rep(nrow(result), ncol(result))), option_value = as.vector(result))
+  
+}
+dS <- 50
+zmiennosc_roczna <- 0.2
+bariera <- 2400
+K <- 2150
+r <- 0.01
+#dla EC bariera
+dt <- 1/(zmiennosc_roczna^2*ceiling(bariera/dS)^2)
+
+#europejska
+wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
+#zrobilem funkcje, ktora zamienia wynik na df, nie wiem czy potrzeba
+df_wynik <- to_df(wynik, dt)
+
+
+library(rgl)
+
+plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
+
+#amerykanska
+wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
+df_wynik <- to_df(wynik, dt)
+plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
+#PUT
+bariera <- 1900
+#dla EP 3*k
+dt <- 1/(zmiennosc_roczna^2*ceiling(K * 3/dS)^2)
+
+wynik = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
+df_wynik <- to_df(wynik, dt)
+plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
+
+
+#amerykanska
+wynik = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
+df_wynik <- to_df(wynik, dt)
+plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
+
+
+
+#BY BYLA NIEPEWNOSC TO TRZEBA DAC NIEPEWNOSC = TRUE i zmiennosc_roczna jako wektor
+
+#DYWIDENDY 
+
+df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = T, dywidenda = 50, kiedy = 0.5)
+df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = F, dywidenda = 0.3, kiedy = 0.5)
+
+
