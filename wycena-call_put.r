@@ -16,15 +16,16 @@ wycena = function(v, dt, dS, S, r, zmiennosc_roczna){
   return(v[2] + (a * g + b * d + c * v[2]) * dt)
 }
 
-#wycena(c(5,0,0), 0.0001, 5, 2149, 0.015, c(0.15,0.25))
-#wycena(c(0,2399,2398), 0.01, 1, 2399, 0.015, 0.2)
+wycena_douglas_explicit = function(v, dt, dS){
+  return((v[3] - 2 * v[2] + v[3])*dt/dS^2 + v[2])
+}
 
 
 
-finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = F)
+
+finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F)
 {
-  zmiennosc_roczna_vec <- zmiennosc_roczna
-  V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[1])
+  V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)
   S_v = seq(0, bariera, dS)
   t_v = seq(0, t, dt)
   n_S = length(S_v)
@@ -34,11 +35,6 @@ finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bari
   siatka[n_S, n_t] = 0
   for (j in (n_t - 1):1) {
     for (i in (n_S - 1):2) {
-      if(niepewnosc)
-      {
-        zmiennosc_roczna[1] <- ifelse(gamma(siatka[(i + 1):(i - 1), j + 1], S_v[i])>0, zmiennosc_roczna_vec[1], zmiennosc_roczna_vec[2])
-        V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[1])
-      }
       siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K)))
       if (sum(siatka[i:(i + 1), j + 1]) == 0) break
     }
@@ -48,9 +44,8 @@ finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bari
 }
 
 
-finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = F){
+finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F){
   V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)
-  
   S_v = seq(bariera, K * 3, dS) #chyba cena wykonania * 3 miaa byæ
   t_v = seq(0, t, dt)
   n_S = length(S_v)
@@ -60,13 +55,7 @@ finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, barie
   siatka[1, n_t] = 0
   for (j in (n_t - 1):1) {
     for (i in (2:(n_S - 1))) {
-      if(niepewnosc)
-      {
-        zmiennosc_roczna[1] <- ifelse(gamma(siatka[(i + 1):(i - 1), j + 1], S_v[i])>0, zmiennosc_roczna_vec[1], zmiennosc_roczna_vec[2])
-        V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[1])
-      }
-      siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K, czy_call = F)))
-      
+     siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K, czy_call = F)))
       if (sum(siatka[i:(i+1), j + 1]) == 0) break
     }
   }
@@ -114,6 +103,26 @@ cena_opcji<- function(df_wynik, K, r, sigma, czy_put = F, bariera)
   df[-1,]
 }
 
+
+douglas_scheme_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F)
+{
+  S_v = seq(0, bariera, dS)
+  t_v = seq(0, t, dt)
+  n_S = length(S_v)
+  n_t = length(t_v)
+  siatka = matrix(0, n_S, n_t)
+  siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = T)
+  siatka[n_S, n_t] = 0
+  for (j in (n_t - 1):1) {
+    for (i in (n_S - 1):2) {
+      siatka[i, j] <- ifelse(amerykanska == F, wycena_douglas_explicit(v = siatka[(i + 1):(i - 1), j + 1], dt = dt, dS = dS), max(wycena_douglas_explicit(v = siatka[(i + 1):(i - 1), j + 1], dt = dt, dS = dS), pay_off(S_v[i], K)))
+      if (sum(siatka[i:(i + 1), j + 1]) == 0) break
+    }
+  }
+  row.names(siatka) = S_v
+  return(siatka)
+}
+
 ###################################
 #CALL##############################
 ###################################
@@ -129,11 +138,15 @@ dt <- 1/(zmiennosc_roczna^2*ceiling(bariera/dS)^2)
 
 #europejska
 wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
+wynik_douglas <- douglas_scheme_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
 #zrobilem funkcje, ktora zamienia wynik na df, nie wiem czy potrzeba
 df_wynik <- to_df(wynik, dt)
+df_wynik_douglas <- to_df(wynik_douglas, dt)
 df_wynik_BSM <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_roczna, bariera = bariera)
 #MSE
 mean((df_wynik$option_value-df_wynik_BSM$option_value)^2)/nrow(df_wynik)
+mean((df_wynik$option_value-df_wynik_douglas$option_value)^2)/nrow(df_wynik)
+
 
 library(rgl)
 
