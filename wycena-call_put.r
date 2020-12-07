@@ -68,15 +68,17 @@ to_df <- function(result, dt)
   data.frame(S = rep(as.numeric(row.names(result)), times = ncol(result)), t = rep(seq(0, 0.837, dt), rep(nrow(result), ncol(result))), option_value = as.vector(result))
 }
 
-to_df_dywidendy <- function(result, dt, kwotowa = T, dywidenda, kiedy)
+to_df_dywidendy <- function(result, dt, kwotowa = T, dywidenda, kiedy, czy_put = F)
 {
   t <- seq(0, 0.837, dt)
   ile <- max(which(t < kiedy))
   if(kwotowa)
   {
+    if(czy_put) dywidenda <- -dywidenda
     S <- c(rep(as.numeric(row.names(result)) + dywidenda, times = ile), rep(as.numeric(row.names(result)), times = ncol(result) - ile))
     
   } else {
+    if(czy_put) dywidenda <- -dywidenda
     S <- c(rep(as.numeric(row.names(result))/(1-dywidenda), times = ile), rep(as.numeric(row.names(result)), times = ncol(result) - ile))
     
   }
