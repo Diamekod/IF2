@@ -151,6 +151,24 @@ mean((df_wynik$option_value-df_wynik_douglas$option_value)^2)/nrow(df_wynik)
 
 
 library(rgl)
+library(plotly)
+library(ggplot2)
+
+breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
+             seq(10, max(df_wynik$option_value), by = 10))
+labelki = paste("=<", breaki) 
+
+df_wynik$option_value.f <- cut(df_wynik$option_value,
+                                    breaks = breaki,
+                                     include.lowest = T)
+g2 <- ggplot(df_wynik, aes(x = t, S)) +
+  geom_tile(aes(fill = option_value.f)) + labs(title = 'Wartosci opcji EC@2150, dla bariery 2400')
+  # Given that factors have discrete levels, we need to use scale_fill_manual instead of scale_fill_continuous
+  #scale_fill_manual(values = RColorBrewer::brewer.pal(20, "PiYG")) # Use RColorBrewer for discrete categories
+
+g2
+
+
 
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
 plot3d(y = df_wynik_BSM$S, x = df_wynik_BSM$t, z = df_wynik_BSM$option_value)
@@ -164,7 +182,19 @@ df_wynik <- to_df(wynik, dt)
 #DLA AMERYKANSKIEJ NIE MAM POROWNANIA, TRZEBA POSZUKAC
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
 
+breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
+             seq(10, max(df_wynik$option_value), by = 10))
+labelki = paste("=<", breaki) 
 
+df_wynik$option_value.f <- cut(df_wynik$option_value,
+                               breaks = breaki,
+                               include.lowest = T)
+g2 <- ggplot(df_wynik, aes(x = t, S)) +
+  geom_tile(aes(fill = option_value.f)) + labs(title = 'Wartosci opcji AC@2150, dla bariery 2400')
+# Given that factors have discrete levels, we need to use scale_fill_manual instead of scale_fill_continuous
+#scale_fill_manual(values = RColorBrewer::brewer.pal(20, "PiYG")) # Use RColorBrewer for discrete categories
+
+g2
 
 
 ###################################
@@ -180,6 +210,22 @@ df_wynik_BSM <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_
 mean((df_wynik$option_value-df_wynik_BSM$option_value)^2)/nrow(df_wynik)
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
 
+dplot <- function(wynik, bariera, K){wplot <- plot_ly(x = seq(0, 0.837, dt), 
+                                                      y = seq(bariera, 3*K, dS),
+                 z = wynik) %>% 
+  add_surface(
+    contours = list(
+      z = list(
+        show=TRUE,
+        usecolormap=TRUE,
+        highlightcolor="#ff0000",
+        project=list(z=TRUE)
+      )
+    )
+  )%>% 
+  layout(title =  'AP@2150, Bariera 1900',scene = list(xaxis = list(title = "t"), yaxis = list(title = "S")))
+wplot}
+
 
 #amerykanska
 wynik = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
@@ -187,6 +233,21 @@ df_wynik <- to_df(wynik, dt)
 
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
 plot3d(y = df_wynik_BSM$S, x = df_wynik_BSM$t, z = df_wynik_BSM$option_value)
+
+
+breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
+             seq(10, max(df_wynik$option_value), by = 10))
+labelki = paste("=<", breaki) 
+
+df_wynik$option_value.f <- cut(df_wynik$option_value,
+                               breaks = breaki,
+                               include.lowest = T)
+g2 <- ggplot(df_wynik, aes(x = t, S)) +
+  geom_tile(aes(fill = option_value.f)) + labs(title = 'Wartosci opcji AP@2150, dla bariery 1900')
+# Given that factors have discrete levels, we need to use scale_fill_manual instead of scale_fill_continuous
+#scale_fill_manual(values = RColorBrewer::brewer.pal(20, "PiYG")) # Use RColorBrewer for discrete categories
+
+g2
 
 
 
@@ -197,5 +258,7 @@ plot3d(y = df_wynik_BSM$S, x = df_wynik_BSM$t, z = df_wynik_BSM$option_value)
 
 df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = T, dywidenda = 50, kiedy = 0.5)
 df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = F, dywidenda = 0.3, kiedy = 0.5)
+
+
 
 
