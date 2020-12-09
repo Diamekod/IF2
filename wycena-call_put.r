@@ -23,9 +23,13 @@ wycena_douglas_explicit = function(v, dt, dS){
 
 
 
-finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F)
+finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = FALSE)
 {
-  V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)
+  if(niepewnosc){
+    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[floor(runif(1, 1, length(zmiennosc_roczna)))])}
+  else{ 
+    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)}
+
   S_v = seq(0, bariera, dS)
   t_v = seq(0, t, dt)
   n_S = length(S_v)
@@ -44,8 +48,11 @@ finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bari
 }
 
 
-finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F){
-  V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)
+finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = FALSE){
+  if(niepewnosc){
+    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[floor(runif(1, 1, length(zmiennosc_roczna)))])}
+  else{ 
+    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)}
   S_v = seq(bariera, K * 3, dS) #chyba cena wykonania * 3 miaa byæ
   t_v = seq(0, t, dt)
   n_S = length(S_v)
@@ -129,6 +136,7 @@ douglas_scheme_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, barier
 #CALL##############################
 ###################################
 library(fExoticOptions)
+library(gridExtra)
 dS <- 50
 zmiennosc_roczna <- 0.2
 bariera <- 2400
@@ -139,10 +147,13 @@ r <- 0.01
 dt <- 1/(zmiennosc_roczna^2*ceiling(bariera/dS)^2)
 
 #europejska
+wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), bariera = bariera, niepewnosc = TRUE)
 wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
+
 wynik_douglas <- douglas_scheme_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
 #zrobilem funkcje, ktora zamienia wynik na df, nie wiem czy potrzeba
 df_wynik <- to_df(wynik, dt)
+df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
 df_wynik_douglas <- to_df(wynik_douglas, dt)
 df_wynik_BSM <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_roczna, bariera = bariera)
 #MSE
@@ -162,23 +173,36 @@ df_wynik$option_value.f <- cut(df_wynik$option_value,
                                     breaks = breaki,
                                      include.lowest = T)
 g2 <- ggplot(df_wynik, aes(x = t, S)) +
-  geom_tile(aes(fill = option_value.f)) + labs(title = 'Wartosci opcji EC@2150, dla bariery 2400')
-  # Given that factors have discrete levels, we need to use scale_fill_manual instead of scale_fill_continuous
-  #scale_fill_manual(values = RColorBrewer::brewer.pal(20, "PiYG")) # Use RColorBrewer for discrete categories
-
+  geom_tile(aes(fill = option_value.f)) + labs(title = 'EP@2150, stala zmiennosc 0.2')+ theme(legend.position = "none")
+  
 g2
 
+breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
+             seq(10, max(df_wynik_niepewnosc$option_value), by = 10))
+
+df_wynik_niepewnosc$option_value.f <- cut(df_wynik_niepewnosc$option_value,
+                               breaks = breaki,
+                               include.lowest = T)
+df_wynik_niepewnosc$stala <- df_wynik$option_value
+g1 <- ggplot(df_wynik_niepewnosc, aes(x = t, S, z = option_value)) +
+  geom_tile(aes(fill = option_value.f)) + 
+  stat_contour(aes(z = stala), breaks = breaki[seq(1, length(breaki), by = 2)], bins = 12) + 
+  labs(title = 'EP@2150, niepewna zmiennosc (0,15,0.25)')  + 
+  theme(legend.position = "none")
+g1
+
+grid.arrange(g1, g2, ncol = 2, nrow = 1)
 
 
-plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
-plot3d(y = df_wynik_BSM$S, x = df_wynik_BSM$t, z = df_wynik_BSM$option_value)
+
 
 
 
 #amerykanska
+wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), bariera = bariera, niepewnosc = TRUE, amerykanska = T)
 wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
 df_wynik <- to_df(wynik, dt)
-
+df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
 #DLA AMERYKANSKIEJ NIE MAM POROWNANIA, TRZEBA POSZUKAC
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
 
@@ -203,9 +227,11 @@ g2
 bariera <- 1900
 #dla EP 3*k
 dt <- 1/(zmiennosc_roczna^2*ceiling(K * 3/dS)^2)
-
+wynik_niepewnosc = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), bariera = bariera, niepewnosc = TRUE)
 wynik = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
 df_wynik <- to_df(wynik, dt)
+df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
+
 df_wynik_BSM <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_roczna, bariera = bariera, czy_put = T)
 mean((df_wynik$option_value-df_wynik_BSM$option_value)^2)/nrow(df_wynik)
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
@@ -223,13 +249,15 @@ dplot <- function(wynik, bariera, K){wplot <- plot_ly(x = seq(0, 0.837, dt),
       )
     )
   )%>% 
-  layout(title =  'AP@2150, Bariera 1900',scene = list(xaxis = list(title = "t"), yaxis = list(title = "S")))
+  layout(title =  'EP@2150',scene = list(xaxis = list(title = "t"), yaxis = list(title = "S")))
 wplot}
 
 
 #amerykanska
+wynik_niepewnosc = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), bariera = bariera, niepewnosc = TRUE, amerykanska = T)
 wynik = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
 df_wynik <- to_df(wynik, dt)
+df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
 
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
 plot3d(y = df_wynik_BSM$S, x = df_wynik_BSM$t, z = df_wynik_BSM$option_value)
