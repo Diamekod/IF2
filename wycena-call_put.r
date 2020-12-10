@@ -20,7 +20,7 @@ wycena = function(v, dt, dS, S, r, zmiennosc_roczna){
   a = zmiennosc_roczna^2 * S^2 / 2
   b = r * S
   c = -r
-  return(c(v[2] + (a * g + b * d + c * v[2]) * dt, g))
+  return(list(v[2] + (a * g + b * d + c * v[2]) * dt, g))
 }
 
 wycena_douglas_explicit = function(v, dt, dS){
@@ -47,13 +47,13 @@ finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bari
   siatka[n_S, n_t] = 0
   for (j in (n_t - 1):1) {
     for (i in (n_S - 1):2) {
-      siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[1], max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[1], pay_off(S_v[i], K)))
-      gamma[i,j] <- V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[2]
+      siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[[1]], max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[[1]], pay_off(S_v[i], K)))
+      gamma[i,j] <- V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[[2]]
       if (sum(siatka[i:(i + 1), j + 1]) == 0) break
     }
   }
   row.names(siatka) = S_v
-  return(c(siatka, gamma))
+  return(list(siatka, gamma))
 }
 
 
@@ -72,13 +72,13 @@ finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, barie
   siatka[1, n_t] = 0
   for (j in (n_t - 1):1) {
     for (i in (2:(n_S - 1))) {
-     siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[1], max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[1], pay_off(S_v[i], K, czy_call = F)))
+     siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[[1]], max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[[1]], pay_off(S_v[i], K, czy_call = F)))
      gamma[i,j] <- V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[2]  
      if (sum(siatka[i:(i+1), j + 1]) == 0) break
     }
   }
   row.names(siatka) = S_v
-  return(c(siatka, gamma))
+  return(list(siatka, gamma))
 }
 
 to_df <- function(result, dt)
@@ -163,7 +163,7 @@ wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna =
 wynik_douglas <- douglas_scheme_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
 #zrobilem funkcje, ktora zamienia wynik na df, nie wiem czy potrzeba
 df_wynik <- to_df(wynik, dt)
-df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
+df_wynik_niepewnosc <- to_df(wynik_niepewnosc[[1]], dt)
 df_wynik_douglas <- to_df(wynik_douglas, dt)
 df_wynik_BSM <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_roczna, bariera = bariera)
 #MSE
@@ -271,7 +271,11 @@ g2 <- ggplot(df_wynik, aes(x = t, S)) +
 g2
 
 
+##amerykanska- wykonanie
 
+execute <- function(df){
+  
+}
 
 #BY BYLA NIEPEWNOSC TO TRZEBA DAC NIEPEWNOSC = TRUE i zmiennosc_roczna jako wektor
 
@@ -287,9 +291,12 @@ df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = F, dywidenda = 0.3, kiedy = 0.5
 
 
 gammaplot <- function(gamma, S, t){
-  cols <- scales::col_numeric("Blues", domain = NULL)(vals)
-  colz <- setNames(data.frame(vals[o], cols[o]), NULL)
-  gplot <- plot_ly(x = t, y= S, z = gamma, colorscale =  colz, type = 'heatmap')
+  breaki <- c( -0.02, -0.001, 0, 0.005, 0.02)
+  gamma <- cut(gamma, breaks = breaki, include.lowest = T)
+  gplot <- plot_ly(x = t, y= S, z = as.integer(gamma), 
+                   colors = rev(RColorBrewer::brewer.pal(9, "GnBu")),
+                   type = 'heatmap'
+                   )
   return(gplot)
 }
 
@@ -339,23 +346,27 @@ dualplot <- function(dS = 50, r = 0.01, bariera, K, call = TRUE){
   wynik_niepewnosc = finite_diference_call(dS = dS, 
                                            dt = dt, 
                                            K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
-                                           bariera = bariera, niepewnosc = TRUE)[1]
+                                           bariera = bariera, niepewnosc = TRUE)
   }
   else{
     dt <- 1/((0.2^2)*ceiling(K * 3/dS)^2)
     wynik_niepewnosc = finite_diference_put(dS = dS, 
                                              dt = dt, 
                                              K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
-                                             bariera = bariera, niepewnosc = TRUE)[1]
+                                             bariera = bariera, niepewnosc = TRUE)
   }
-  df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
-  gamma <- gammaplot(gamma = wynik_niepewnosc[2], S = df_wynik_niepewnosc$S, t =df_wynik_niepewnosc$t)
-  trojwym <- dplot(wynik_niepewnosc, bariera, K, call)
+  df_wynik_niepewnosc <- to_df(wynik_niepewnosc[[1]], dt)
+  gamma <- gammaplot(gamma = wynik_niepewnosc[[2]], S = df_wynik_niepewnosc$S, t =df_wynik_niepewnosc$t)
+  trojwym <- dplot(wynik_niepewnosc[[1]], bariera, K, call)
   heat <- heatplot(df_wynik_niepewnosc)
-  fig <- subplot(gamma, trojwym, heat)
+  fig <- subplot(heat, gamma, trojwym, nrows = 2) 
+  fig <- fig %>% layout(title = paste("Opcja call@", K, "B", bariera, sep = ''),
+                        xaxis = list(domain=list(x=c(0,0.5),y=c(0,0.5))),
+                        scene = list(domain=list(x=c(0.5,1),y=c(0,0.5))),
+                        xaxis2 = list(domain=list(x=c(0.5,1),y=c(0.5,1))),
+                        showlegend=FALSE,showlegend2=FALSE)
   fig
-  return(c(trojwym, heat, gamma))
-  }
+   }
 
 
 
