@@ -1,3 +1,10 @@
+library(rgl)
+library(plotly)
+library(ggplot2)
+library(fExoticOptions)
+library(gridExtra)
+library(manipulate)
+
 pay_off = function(S, K, czy_call = T) if(czy_call) pmax(S - K, 0) else pmax(K - S, 0)
 
 delta = function(v, dS) (v[1] - v[3]) / (2 * dS)
@@ -135,8 +142,7 @@ douglas_scheme_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, barier
 ###################################
 #CALL##############################
 ###################################
-library(fExoticOptions)
-library(gridExtra)
+
 dS <- 50
 zmiennosc_roczna <- 0.2
 bariera <- 2400
@@ -161,9 +167,7 @@ mean((df_wynik$option_value-df_wynik_BSM$option_value)^2)/nrow(df_wynik)
 mean((df_wynik$option_value-df_wynik_douglas$option_value)^2)/nrow(df_wynik)
 
 
-library(rgl)
-library(plotly)
-library(ggplot2)
+
 
 breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
              seq(10, max(df_wynik$option_value), by = 10))
@@ -236,21 +240,6 @@ df_wynik_BSM <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_
 mean((df_wynik$option_value-df_wynik_BSM$option_value)^2)/nrow(df_wynik)
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
 
-dplot <- function(wynik, bariera, K){wplot <- plot_ly(x = seq(0, 0.837, dt), 
-                                                      y = seq(bariera, 3*K, dS),
-                 z = wynik) %>% 
-  add_surface(
-    contours = list(
-      z = list(
-        show=TRUE,
-        usecolormap=TRUE,
-        highlightcolor="#ff0000",
-        project=list(z=TRUE)
-      )
-    )
-  )%>% 
-  layout(title =  'EP@2150',scene = list(xaxis = list(title = "t"), yaxis = list(title = "S")))
-wplot}
 
 
 #amerykanska
@@ -286,6 +275,78 @@ g2
 
 df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = T, dywidenda = 50, kiedy = 0.5)
 df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = F, dywidenda = 0.3, kiedy = 0.5)
+
+
+
+
+###funkcje plotujace
+
+dplot <- function(wynik, bariera, K, call = TRUE){
+  if(call){
+    y = seq(0,bariera, dS) 
+  }
+  else{
+    y = seq(bariera, 3*K, dS)
+  }
+  wplot <- plot_ly(x = seq(0, 0.837, dt),y = y ,z = wynik) %>% 
+  add_surface(
+    contours = list(
+      z = list(
+        show=TRUE,
+        usecolormap=TRUE,
+        highlightcolor="#ff0000",
+        project=list(z=TRUE)
+      )
+    )
+  ) %>% layout(scene = list(xaxis = list(title = "t"), yaxis = list(title = "S")))
+  return(wplot)
+ }
+
+heatplot <- function(df_wynik){
+    
+      breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
+                   seq(10, max(df_wynik$option_value), by = 10))
+    
+    
+    df_wynik$option_value.f <- cut(df_wynik$option_value,
+                                   breaks = breaki,
+                                   include.lowest = T)
+    g2 <- ggplot(df_wynik, aes(x = t, S)) +
+      geom_tile(aes(fill = option_value.f)) +  
+      theme(legend.position = "none")
+    
+    return(g2)
+}
+
+interactive <- function(dS = 50, r = 0.01, bariera, K, call = TRUE){
+  if(call){
+  dt <- 1/((0.2^2)*ceiling(bariera/dS)^2)
+  wynik_niepewnosc = finite_diference_call(dS = dS, 
+                                           dt = dt, 
+                                           K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
+                                           bariera = bariera, niepewnosc = TRUE)
+  }
+  else{
+    dt <- 1/((0.2^2)*ceiling(K * 3/dS)^2)
+    wynik_niepewnosc = finite_diference_put(dS = dS, 
+                                             dt = dt, 
+                                             K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
+                                             bariera = bariera, niepewnosc = TRUE)
+  }
+  df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
+  trojwym <- dplot(wynik_niepewnosc, bariera, K, call)
+  #heat <- heatplot(df_wynik_niepewnosc)
+  trojwym
+  }
+
+suwaczki <- function(){
+  manipulate(
+    interactive(bariera = bariera, K = K, call = call),
+    bariera = slider(1000, 4000, step = 100, initial = 2400),
+    K = slider(1000, 4000, step = 100, initial = 2150),
+    call = checkbox(TRUE, 'call?')
+  )
+}
 
 
 
