@@ -20,7 +20,7 @@ wycena = function(v, dt, dS, S, r, zmiennosc_roczna){
   a = zmiennosc_roczna^2 * S^2 / 2
   b = r * S
   c = -r
-  return(v[2] + (a * g + b * d + c * v[2]) * dt)
+  return(c(v[2] + (a * g + b * d + c * v[2]) * dt, g))
 }
 
 wycena_douglas_explicit = function(v, dt, dS){
@@ -42,16 +42,18 @@ finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bari
   n_S = length(S_v)
   n_t = length(t_v)
   siatka = matrix(0, n_S, n_t)
+  gamma <- siatka
   siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = T)
   siatka[n_S, n_t] = 0
   for (j in (n_t - 1):1) {
     for (i in (n_S - 1):2) {
-      siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K)))
+      siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[1], max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[1], pay_off(S_v[i], K)))
+      gamma[i,j] <- V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[2]
       if (sum(siatka[i:(i + 1), j + 1]) == 0) break
     }
   }
   row.names(siatka) = S_v
-  return(siatka)
+  return(c(siatka, gamma))
 }
 
 
@@ -65,16 +67,18 @@ finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, barie
   n_S = length(S_v)
   n_t = length(t_v)
   siatka = matrix(0, n_S, n_t)
+  gamma <- siatka
   siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = F)
   siatka[1, n_t] = 0
   for (j in (n_t - 1):1) {
     for (i in (2:(n_S - 1))) {
-     siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K, czy_call = F)))
-      if (sum(siatka[i:(i+1), j + 1]) == 0) break
+     siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[1], max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[1], pay_off(S_v[i], K, czy_call = F)))
+     gamma[i,j] <- V(siatka[(i + 1):(i - 1), j + 1], S_v[i])[2]  
+     if (sum(siatka[i:(i+1), j + 1]) == 0) break
     }
   }
   row.names(siatka) = S_v
-  return(siatka)
+  return(c(siatka, gamma))
 }
 
 to_df <- function(result, dt)
@@ -203,7 +207,7 @@ grid.arrange(g1, g2, ncol = 2, nrow = 1)
 
 
 #amerykanska
-wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), bariera = bariera, niepewnosc = TRUE, amerykanska = T)
+wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), bariera = bariera, niepewnosc = TRUE, amerykanska = T)[1]
 wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
 df_wynik <- to_df(wynik, dt)
 df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
@@ -281,6 +285,14 @@ df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = F, dywidenda = 0.3, kiedy = 0.5
 
 ###funkcje plotujace
 
+
+gammaplot <- function(gamma, S, t){
+  cols <- scales::col_numeric("Blues", domain = NULL)(vals)
+  colz <- setNames(data.frame(vals[o], cols[o]), NULL)
+  gplot <- plot_ly(x = t, y= S, z = gamma, colorscale =  colz, type = 'heatmap')
+  return(gplot)
+}
+
 dplot <- function(wynik, bariera, K, call = TRUE){
   if(call){
     y = seq(0,bariera, dS) 
@@ -311,42 +323,76 @@ heatplot <- function(df_wynik){
     df_wynik$option_value.f <- cut(df_wynik$option_value,
                                    breaks = breaki,
                                    include.lowest = T)
-    g2 <- ggplot(df_wynik, aes(x = t, S)) +
-      geom_tile(aes(fill = option_value.f)) +  
-      theme(legend.position = "none")
+    g2 <- plot_ly(x = df_wynik_niepewnosc$t, 
+                  y = df_wynik_niepewnosc$S, 
+                  z = as.integer(df_wynik_niepewnosc$option_value.f), 
+                  type = 'heatmap',
+                  colors = rev(RColorBrewer::brewer.pal(9, "PuRd")), 
+                  showscale = FALSE)
     
     return(g2)
 }
 
-interactive <- function(dS = 50, r = 0.01, bariera, K, call = TRUE){
+dualplot <- function(dS = 50, r = 0.01, bariera, K, call = TRUE){
   if(call){
   dt <- 1/((0.2^2)*ceiling(bariera/dS)^2)
   wynik_niepewnosc = finite_diference_call(dS = dS, 
                                            dt = dt, 
                                            K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
-                                           bariera = bariera, niepewnosc = TRUE)
+                                           bariera = bariera, niepewnosc = TRUE)[1]
   }
   else{
     dt <- 1/((0.2^2)*ceiling(K * 3/dS)^2)
     wynik_niepewnosc = finite_diference_put(dS = dS, 
                                              dt = dt, 
                                              K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
-                                             bariera = bariera, niepewnosc = TRUE)
+                                             bariera = bariera, niepewnosc = TRUE)[1]
   }
   df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
+  gamma <- gammaplot(gamma = wynik_niepewnosc[2], S = df_wynik_niepewnosc$S, t =df_wynik_niepewnosc$t)
   trojwym <- dplot(wynik_niepewnosc, bariera, K, call)
-  #heat <- heatplot(df_wynik_niepewnosc)
-  trojwym
+  heat <- heatplot(df_wynik_niepewnosc)
+  fig <- subplot(gamma, trojwym, heat)
+  fig
+  return(c(trojwym, heat, gamma))
   }
 
-suwaczki <- function(){
-  manipulate(
-    interactive(bariera = bariera, K = K, call = call),
-    bariera = slider(1000, 4000, step = 100, initial = 2400),
-    K = slider(1000, 4000, step = 100, initial = 2150),
-    call = checkbox(TRUE, 'call?')
+
+
+
+library(tidyr)
+
+#slidery
+K_range <- data.frame(seq(1000,4000, 100))
+barier_range <- data.frame(seq(1000,4000, 100))
+colnames(K_range) <- 'x'
+colnames(barier_range) <- 'x'
+
+all_K <- list()
+for(i in 1:length(K_range$x)){
+  all_K[[i]] <- list(
+    method = 'relayout',
+    args = list()
   )
 }
+
+
+df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
+breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
+             seq(10, max(df_wynik_niepewnosc$option_value), by = 20))
+
+
+df_wynik_niepewnosc$option_value.f <- cut(df_wynik_niepewnosc$option_value,
+                               breaks = breaki,
+                               include.lowest = T)
+
+df_wynik_niepewnosc 
+ fig <-  plot_ly(x = df_wynik_niepewnosc$t, 
+                 y = df_wynik_niepewnosc$S, 
+                 z = as.integer(df_wynik_niepewnosc$option_value.f), type = 'heatmap',
+               colors = rev(RColorBrewer::brewer.pal(9, "PuRd")), showscale = FALSE) 
+ 
+fig
 
 
 
