@@ -4,6 +4,7 @@ library(ggplot2)
 library(fExoticOptions)
 library(gridExtra)
 library(manipulate)
+library(dplyr)
 
 pay_off = function(S, K, czy_call = T) if(czy_call) pmax(S - K, 0) else pmax(K - S, 0)
 
@@ -30,13 +31,13 @@ wycena_douglas_explicit = function(v, dt, dS){
 
 
 
-finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = FALSE)
+finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = FALSE, dywidenda = NA, moment_dywidendy = NA)
 {
   if(niepewnosc){
     V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[floor(runif(1, 1, length(zmiennosc_roczna)))])}
   else{ 
     V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)}
-
+  
   S_v = seq(0, bariera, dS)
   t_v = seq(0, t, dt)
   n_S = length(S_v)
@@ -45,22 +46,35 @@ finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bari
   siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = T)
   siatka[n_S, n_t] = 0
   for (j in (n_t - 1):1) {
+    if(!is.na(moment_dywidendy))
+    {
+      if(t_v[j]<= moment_dywidendy & t_v[j+1] > moment_dywidendy)
+      {
+        
+        if(dywidenda>1)
+        {
+          S_v <- S_v+dywidenda
+        } else {
+          S_v <- S_v/(1-dywidenda)
+        }
+      }
+    }
     for (i in (n_S - 1):2) {
       siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K)))
-      if (sum(siatka[i:(i + 1), j + 1]) == 0) break
+      if(S_v[i]>=bariera) siatka[i,j] <- 0
+      #if (sum(siatka[i:(i + 1), j + 1]) == 0) break
     }
   }
-  row.names(siatka) = S_v
   return(siatka)
 }
 
 
-finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = FALSE){
+finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = FALSE, dywidenda = NA, moment_dywidendy = NA){
   if(niepewnosc){
     V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[floor(runif(1, 1, length(zmiennosc_roczna)))])}
   else{ 
     V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)}
-  S_v = seq(bariera, K * 3, dS) #chyba cena wykonania * 3 miaa byæ
+  S_v = seq(bariera, K * 3, dS) #chyba cena wykonania * 3 miaa bya
   t_v = seq(0, t, dt)
   n_S = length(S_v)
   n_t = length(t_v)
@@ -68,14 +82,30 @@ finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, barie
   siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = F)
   siatka[1, n_t] = 0
   for (j in (n_t - 1):1) {
+    if(!is.na(moment_dywidendy))
+    {
+      if(t_v[j]<= moment_dywidendy & t_v[j+1] > moment_dywidendy)
+      {
+        
+        if(dywidenda>1)
+        {
+          S_v <- S_v+dywidenda
+        } else {
+          S_v <- S_v/(1-dywidenda)
+        }
+      }
+    }
     for (i in (2:(n_S - 1))) {
-     siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K, czy_call = F)))
+      siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K, czy_call = F)))
+      if(S_v[i]<=bariera) siatka[i,j] <- 0
       if (sum(siatka[i:(i+1), j + 1]) == 0) break
     }
   }
-  row.names(siatka) = S_v
   return(siatka)
 }
+
+
+
 
 to_df <- function(result, dt)
 {
@@ -174,19 +204,19 @@ breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7,
 labelki = paste("=<", breaki) 
 
 df_wynik$option_value.f <- cut(df_wynik$option_value,
-                                    breaks = breaki,
-                                     include.lowest = T)
+                               breaks = breaki,
+                               include.lowest = T)
 g2 <- ggplot(df_wynik, aes(x = t, S)) +
   geom_tile(aes(fill = option_value.f)) + labs(title = 'EP@2150, stala zmiennosc 0.2')+ theme(legend.position = "none")
-  
+
 g2
 
 breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
              seq(10, max(df_wynik_niepewnosc$option_value), by = 10))
 
 df_wynik_niepewnosc$option_value.f <- cut(df_wynik_niepewnosc$option_value,
-                               breaks = breaki,
-                               include.lowest = T)
+                                          breaks = breaki,
+                                          include.lowest = T)
 df_wynik_niepewnosc$stala <- df_wynik$option_value
 g1 <- ggplot(df_wynik_niepewnosc, aes(x = t, S, z = option_value)) +
   geom_tile(aes(fill = option_value.f)) + 
@@ -289,55 +319,55 @@ dplot <- function(wynik, bariera, K, call = TRUE){
     y = seq(bariera, 3*K, dS)
   }
   wplot <- plot_ly(x = seq(0, 0.837, dt),y = y ,z = wynik) %>% 
-  add_surface(
-    contours = list(
-      z = list(
-        show=TRUE,
-        usecolormap=TRUE,
-        highlightcolor="#ff0000",
-        project=list(z=TRUE)
+    add_surface(
+      contours = list(
+        z = list(
+          show=TRUE,
+          usecolormap=TRUE,
+          highlightcolor="#ff0000",
+          project=list(z=TRUE)
+        )
       )
-    )
-  ) %>% layout(scene = list(xaxis = list(title = "t"), yaxis = list(title = "S")))
+    ) %>% layout(scene = list(xaxis = list(title = "t"), yaxis = list(title = "S")))
   return(wplot)
- }
+}
 
 heatplot <- function(df_wynik){
-    
-      breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
-                   seq(10, max(df_wynik$option_value), by = 10))
-    
-    
-    df_wynik$option_value.f <- cut(df_wynik$option_value,
-                                   breaks = breaki,
-                                   include.lowest = T)
-    g2 <- ggplot(df_wynik, aes(x = t, S)) +
-      geom_tile(aes(fill = option_value.f)) +  
-      theme(legend.position = "none")
-    
-    return(g2)
+  
+  breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
+               seq(10, max(df_wynik$option_value), by = 10))
+  
+  
+  df_wynik$option_value.f <- cut(df_wynik$option_value,
+                                 breaks = breaki,
+                                 include.lowest = T)
+  g2 <- ggplot(df_wynik, aes(x = t, S)) +
+    geom_tile(aes(fill = option_value.f)) +  
+    theme(legend.position = "none")
+  
+  return(g2)
 }
 
 interactive <- function(dS = 50, r = 0.01, bariera, K, call = TRUE){
   if(call){
-  dt <- 1/((0.2^2)*ceiling(bariera/dS)^2)
-  wynik_niepewnosc = finite_diference_call(dS = dS, 
-                                           dt = dt, 
-                                           K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
-                                           bariera = bariera, niepewnosc = TRUE)
+    dt <- 1/((0.2^2)*ceiling(bariera/dS)^2)
+    wynik_niepewnosc = finite_diference_call(dS = dS, 
+                                             dt = dt, 
+                                             K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
+                                             bariera = bariera, niepewnosc = TRUE)
   }
   else{
     dt <- 1/((0.2^2)*ceiling(K * 3/dS)^2)
     wynik_niepewnosc = finite_diference_put(dS = dS, 
-                                             dt = dt, 
-                                             K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
-                                             bariera = bariera, niepewnosc = TRUE)
+                                            dt = dt, 
+                                            K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), 
+                                            bariera = bariera, niepewnosc = TRUE)
   }
   df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
   trojwym <- dplot(wynik_niepewnosc, bariera, K, call)
   #heat <- heatplot(df_wynik_niepewnosc)
   trojwym
-  }
+}
 
 suwaczki <- function(){
   manipulate(
@@ -347,7 +377,3 @@ suwaczki <- function(){
     call = checkbox(TRUE, 'call?')
   )
 }
-
-
-
-
