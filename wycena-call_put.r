@@ -31,13 +31,11 @@ wycena_douglas_explicit = function(v, dt, dS){
 
 
 
-finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = FALSE, dywidenda = NA, moment_dywidendy = NA)
+finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, dywidenda = NA, moment_dywidendy = NA)
 {
-  if(niepewnosc){
-    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[floor(runif(1, 1, length(zmiennosc_roczna)))])}
-  else{ 
-    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)}
   
+    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)}
+ 
   S_v = seq(0, bariera, dS)
   t_v = seq(0, t, dt)
   n_S = length(S_v)
