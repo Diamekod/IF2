@@ -33,45 +33,42 @@ wycena_douglas_explicit = function(v, dt, dS){
 
 finite_diference_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, dywidenda = NA, moment_dywidendy = NA)
 {
-  
-    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)}
- 
-  S_v = seq(0, bariera, dS)
-  t_v = seq(0, t, dt)
-  n_S = length(S_v)
-  n_t = length(t_v)
-  siatka = matrix(0, n_S, n_t)
-  siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = T)
-  siatka[n_S, n_t] = 0
-  for (j in (n_t - 1):1) {
-    if(!is.na(moment_dywidendy))
+V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)
+S_v = seq(0, bariera, dS)
+t_v = seq(0, t, dt)
+n_S = length(S_v)
+n_t = length(t_v)
+siatka = matrix(0, n_S, n_t)
+siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = T)
+siatka[n_S, n_t] = 0
+S_v_old <- S_v
+for (j in (n_t - 1):1) {
+  if(!is.na(moment_dywidendy))
+  {
+    if(t_v[j]<= moment_dywidendy & t_v[j+1] > moment_dywidendy)
     {
-      if(t_v[j]<= moment_dywidendy & t_v[j+1] > moment_dywidendy)
+      
+      if(dywidenda>1)
       {
-        
-        if(dywidenda>1)
-        {
-          S_v <- S_v+dywidenda
-        } else {
-          S_v <- S_v/(1-dywidenda)
-        }
+        S_v <- S_v+dywidenda
+      } else {
+        S_v <- S_v/(1-dywidenda)
       }
     }
-    for (i in (n_S - 1):2) {
-      siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K)))
-      if(S_v[i]>=bariera) siatka[i,j] <- 0
-      #if (sum(siatka[i:(i + 1), j + 1]) == 0) break
-    }
   }
-  return(siatka)
+  for (i in (n_S - 1):2) {
+    siatka[i, j] <- ifelse(amerykanska == F, V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), max(V(siatka[(i + 1):(i - 1), j + 1], S_v[i]), pay_off(S_v[i], K)))
+    if(S_v[i]>=bariera) siatka[i,j] <- 0
+    #if (sum(siatka[i:(i + 1), j + 1]) == 0) break
+  }
+}
+row.names(siatka) <- as.character(S_v_old)
+return(siatka)
 }
 
 
-finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, niepewnosc = FALSE, dywidenda = NA, moment_dywidendy = NA){
-  if(niepewnosc){
-    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna[floor(runif(1, 1, length(zmiennosc_roczna)))])}
-  else{ 
-    V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)}
+finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F, dywidenda = NA, moment_dywidendy = NA){
+  V = function(v, S) wycena(v = v, dt = dt, dS = dS, S = S, r = r, zmiennosc_roczna = zmiennosc_roczna)
   S_v = seq(bariera, K * 3, dS) #chyba cena wykonania * 3 miaa bya
   t_v = seq(0, t, dt)
   n_S = length(S_v)
@@ -79,6 +76,7 @@ finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, barie
   siatka = matrix(0, n_S, n_t)
   siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = F)
   siatka[1, n_t] = 0
+  S_v_old <- S_v
   for (j in (n_t - 1):1) {
     if(!is.na(moment_dywidendy))
     {
@@ -99,6 +97,7 @@ finite_diference_put = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, barie
       if (sum(siatka[i:(i+1), j + 1]) == 0) break
     }
   }
+  row.names(siatka) <- as.character(S_v_old)
   return(siatka)
 }
 
@@ -181,7 +180,7 @@ r <- 0.01
 dt <- 1/(zmiennosc_roczna^2*ceiling(bariera/dS)^2)
 
 #europejska
-wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), bariera = bariera, niepewnosc = TRUE)
+wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = c(0.15, 0.25), bariera = bariera)
 wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
 
 wynik_douglas <- douglas_scheme_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
@@ -231,7 +230,7 @@ grid.arrange(g1, g2, ncol = 2, nrow = 1)
 
 
 #amerykanska
-wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = seq(0.15, 0.25, by = 0.05), bariera = bariera, niepewnosc = TRUE, amerykanska = T)
+wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = c(0.15, 0.25), bariera = bariera, niepewnosc = TRUE, amerykanska = T)
 wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
 df_wynik <- to_df(wynik, dt)
 df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
