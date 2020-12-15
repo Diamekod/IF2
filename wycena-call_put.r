@@ -138,7 +138,6 @@ cena_opcji<- function(df_wynik, K, r, sigma, czy_put = F, bariera)
   {
     for(i in sort(unique(df_wynik$S)))
     {
-      
       df <- rbind(df, c(i, j, StandardBarrierOption(TypeFlag = type, S = i, X = K, H = bariera, r = r, sigma = sigma, K = 0, Time = 0.837 - j, b = 0)@price))
     }
   }
@@ -147,23 +146,16 @@ cena_opcji<- function(df_wynik, K, r, sigma, czy_put = F, bariera)
 }
 
 
-douglas_scheme_call = function(dS, dt, t = 0.837, K, r, zmiennosc_roczna, bariera, amerykanska = F)
+cena_opcji_amerykanska <- function(df_wynik, K, czy_put = F, bariera, I)
 {
-  S_v = seq(0, bariera, dS)
-  t_v = seq(0, t, dt)
-  n_S = length(S_v)
-  n_t = length(t_v)
-  siatka = matrix(0, n_S, n_t)
-  siatka[, n_t] = pay_off(S = S_v, K = K, czy_call = T)
-  siatka[n_S, n_t] = 0
-  for (j in (n_t - 1):1) {
-    for (i in (n_S - 1):2) {
-      siatka[i, j] <- ifelse(amerykanska == F, wycena_douglas_explicit(v = siatka[(i + 1):(i - 1), j + 1], dt = dt, dS = dS), max(wycena_douglas_explicit(v = siatka[(i + 1):(i - 1), j + 1], dt = dt, dS = dS), pay_off(S_v[i], K)))
-      if (sum(siatka[i:(i + 1), j + 1]) == 0) break
-    }
+  for(i in 1:nrow(df_wynik))
+  {
+    print(i)
+    if((i + I + 1) > nrow(df_wynik)) break
+    df_wynik[i,]$option_value <- max(df_wynik[i + I + 1,]$option_value, pay_off(df_wynik[i,]$S, K, czy_call = !czy_put))
+    if(df_wynik[i,]$S == bariera) df_wynik[i,]$option_value <- 0
   }
-  row.names(siatka) = S_v
-  return(siatka)
+  return(df_wynik)
 }
 
 ###################################
@@ -183,14 +175,14 @@ dt <- 1/(zmiennosc_roczna^2*ceiling(bariera/dS)^2)
 wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = c(0.15, 0.25), bariera = bariera)
 wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
 
-wynik_douglas <- douglas_scheme_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera)
+
 #zrobilem funkcje, ktora zamienia wynik na df, nie wiem czy potrzeba
 df_wynik <- to_df(wynik, dt)
 df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
 df_wynik_douglas <- to_df(wynik_douglas, dt)
-df_wynik_BSM <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_roczna, bariera = bariera)
+df_wynik_BSM_EU <- cena_opcji(df_wynik = df_wynik, K = K, r = r, sigma = zmiennosc_roczna, bariera = bariera)
 #MSE
-mean((df_wynik$option_value-df_wynik_BSM$option_value)^2)/nrow(df_wynik)
+mean((df_wynik$option_value-df_wynik_BSM_EU$option_value)^2)/nrow(df_wynik)
 mean((df_wynik$option_value-df_wynik_douglas$option_value)^2)/nrow(df_wynik)
 
 
@@ -235,6 +227,10 @@ wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna =
 df_wynik <- to_df(wynik, dt)
 df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
 #DLA AMERYKANSKIEJ NIE MAM POROWNANIA, TRZEBA POSZUKAC
+df_wynik_BSM_AM <- cena_opcji_amerykanska(df_wynik = df_wynik_BSM_EU, K = K, bariera = bariera, I = bariera/dS)
+mean((df_wynik$option_value-df_wynik_BSM_AM$option_value)^2)/nrow(df_wynik)
+
+
 plot3d(y = df_wynik$S, x = df_wynik$t, z = df_wynik$option_value)
 
 breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
