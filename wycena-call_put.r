@@ -398,14 +398,14 @@ g2
 #DYWIDENDY 
 
 df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = T, dywidenda = 50, kiedy = 0.5)
-df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = F, dywidenda = 0.3, kiedy = 0.5)
+df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = F, dywidenda = 0.1, kiedy = 0.5)
 
 
 
 
 ###funkcje plotujace
 
-dplot <- function(wynik, bariera, K, call = TRUE){
+dplot <- function(wynik, bariera, K, call = TRUE, dS, dt){
   if(call){
     y = seq(0,bariera, dS) 
   }
@@ -429,15 +429,18 @@ dplot <- function(wynik, bariera, K, call = TRUE){
 heatplot <- function(df_wynik){
   
   breaki <- c( 0, 0.01, 0.5, 1, 3, 5, 7, 
-               seq(10, max(df_wynik$option_value), by = 10))
+               seq(10, max(df_wynik$option_value), length = 5))
   
   
   df_wynik$option_value.f <- cut(df_wynik$option_value,
                                  breaks = breaki,
                                  include.lowest = T)
-  g2 <- ggplot(df_wynik, aes(x = t, S)) +
-    geom_tile(aes(fill = option_value.f)) +  
-    theme(legend.position = "none")
+  g2 <- plot_ly(x = df_wynik$t, 
+                y = df_wynik$S, 
+                z = as.integer(df_wynik$option_value.f), 
+                type = 'heatmap',
+                colors = rev(RColorBrewer::brewer.pal(9, "PuRd")), 
+                showscale = FALSE)
   
   return(g2)
 }
@@ -471,3 +474,42 @@ suwaczki <- function(){
     call = checkbox(TRUE, 'call?')
   )
 }
+
+T <- 0.837
+dywidenda_plot <- function(t = 0.4185, bar = 2400, dyw = 0.1, strike = 2150, kwotowa = F, call = TRUE, amerykanska = FALSE){
+  if(call == TRUE){
+    zmiennosc_roczna <- c(0.15, 0.25)
+    bariera <- bar
+    dS <- 50
+    K <- strike
+    r <- 0.01
+    dt <- 1/(zmiennosc_roczna[1]^2*ceiling(bariera/dS)^2)
+    wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = amerykanska)
+    df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = kwotowa, dywidenda = dyw, kiedy = t)
+    
+  }
+  else{
+    dS <- 50
+    zmiennosc_roczna <-  c(0.15, 0.25)
+    bariera <- bariera
+    K <- 2150
+    r <- 0.01
+    
+    #dla EP 3*k
+    dt <- 1/(zmiennosc_roczna[1]^2*ceiling(K * 3/dS)^2)
+    
+    
+    wynik = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = amerykanska)
+    df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = kwotowa, dywidenda = dyw, kiedy = t)
+  }
+  dyw_ds <- df_wynik$S[2]-df_wynik$S[1]
+  g1 <- dplot(wynik = df_wynik$option_value, bariera = bar, K = strike, call = call, dS = dyw_ds, dt =dt) 
+  g1 <- g1 %>% layout(title = paste('Wartosc opcji przy dywidendzie ', dyw, 'strike ', strike, 
+                                    'bariera ', bar, sep =''))
+  g2 <- heatplot(df_wynik)
+  g2 <- g2  %>% layout(title = paste('Wartosci opcji przy dywidendzie ', dyw, 'strike ', strike, 
+                                  'bariera ', bar, sep =''))
+  f1 <- subplot(g1,g2, nrows = 1)
+  
+  return(f1)
+  }
