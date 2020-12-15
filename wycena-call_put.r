@@ -216,48 +216,107 @@ g1
 
 grid.arrange(g1, g2, ncol = 2, nrow = 1)
 
-
-g1 <- plot_ly(x = seq(0,0.837, length = 49), y =  df_wynik$option_value[df_wynik$t == 0]
-              , type = 'scatter', mode = 'lines+markers', name = 'stala sigma 0.2')
-g1 <- g1 %>% add_trace(y = df_wynik_niepewnosc$option_value[df_wynik$t == 0], name = 'z niepewnoscia', 
-                       mode = 'lines+markers') 
-g1 <- g1 %>% layout(title = "Wartosci opcji EP@2150, bariera 1900, bez dywidendy w t=0 ",
-                    xaxis = list(title = "t"),
+plotcall <- function(bariera, a=FALSE){
+  
+  dS <- 50
+  zmiennosc_roczna <- 0.2
+  bariera <- bariera
+  K <- 2150
+  r <- 0.01
+  
+  
+  dt <- 1/(zmiennosc_roczna^2*ceiling(bariera/dS)^2)
+  
+  #europejska
+  wynik_niepewnosc = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = c(0.15, 0.25), bariera = bariera, amerykanska = a)
+  wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = a)
+  
+  
+  #zrobilem funkcje, ktora zamienia wynik na df, nie wiem czy potrzeba
+  df_wynik <- to_df(wynik, dt)
+  df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
+  
+  
+x = range(df_wynik_niepewnosc$S)
+y = df_wynik_niepewnosc$option_value[df_wynik$t == 0]
+g1 <- plot_ly(x = seq(x[1], x[2], length = length(y)), 
+              y =  y
+              , type = 'scatter', mode = 'lines+markers', name = paste('zmienna sigma, bariera ', bariera, sep =''))
+g1 <- g1 %>% add_trace(y = df_wynik$option_value[df_wynik$t == 0] , name = 'stala sigma',
+                       mode = 'lines+markers',
+                       showlegend= FALSE) 
+g1 <- g1 %>% layout(title = paste("Wartosci opcji AC@2150, bariera 2400-", bariera, ', bez dywidendy, w t=0 ', sep =''),
+                    xaxis = list(title = "S"),
                     yaxis = list (range = c(0,600), title = "V"))  
-g1
+return(g1)
+}
 
-g2 <- plot_ly(x = seq(0,0.837, length = 51), y =  df_wynik$option_value[df_wynik$t == 0]
-              , type = 'scatter', mode = 'lines+markers', name = 'stala sigma 0.2')
-g2 <- g2 %>% add_trace(y = df_wynik_niepewnosc$option_value[df_wynik$t == 0], name = 'z niepewnoscia', 
-                       mode = 'lines+markers') 
-g2 <- g2 %>% layout(title = "Wartosci opcji EC@2150, bariera 2500, bez dywidendy w t=0 ",
-                    xaxis = list(title = "t"),
-                    yaxis = list (range = c(0,600), title = "V"))
-g2
-
-g3 <- plot_ly(x = seq(0,0.837, length = 53), y =  df_wynik$option_value[df_wynik$t == 0]
-              , type = 'scatter', mode = 'lines+markers', name = 'stala sigma 0.2')
-g3 <- g3 %>% add_trace(y = df_wynik_niepewnosc$option_value[df_wynik$t == 0], name = 'z niepewnoscia', 
-                       mode = 'lines+markers') 
-g3 <- g3 %>% layout(title = "Wartosci opcji EC@2150, bariera 2600, bez dywidendy w t=0 ",
-                    xaxis = list(title = "t"),
-                    yaxis = list (range = c(0,600), title = "V"))
-g3
-
-g4 <- plot_ly(x = seq(0,0.837, length = 55), y =  df_wynik$option_value[df_wynik$t == 0]
-              , type = 'scatter', mode = 'lines+markers', name = 'stala sigma 0.2')
-g4 <- g4 %>% add_trace(y = df_wynik_niepewnosc$option_value[df_wynik$t == 0], name = 'z niepewnoscia', 
-                       mode = 'lines+markers') 
-g4 <- g4 %>% layout(title = "Wartosci opcji AC@2150, bariera 2400-2700, bez dywidendy w t=0 ",
-                    xaxis = list(title = "t"),
-                    yaxis = list (range = c(0,600), title = "V"))
-
-g4
+g1 <- plotcall(2400)
+g2 <- plotcall(2500)
+g3 <- plotcall(2600)
+g4 <- plotcall(2700)
 
 sub <- subplot(g1, g2, g3, g4, nrows = 2)
 sub
 
+g1 <- plotcall(2400, a = T)
+g2 <- plotcall(2500, a = T)
+g3 <- plotcall(2600, a = T)
+g4 <- plotcall(2700, a = T)
 
+sub <- subplot(g1, g2, g3, g4, nrows = 2)
+sub
+
+plotput <- function(bariera, a=FALSE){
+  
+  dS <- 50
+  zmiennosc_roczna <- 0.2
+  bariera <- bariera
+  K <- 2150
+  r <- 0.01
+  
+  #dla EP 3*k
+  dt <- 1/(zmiennosc_roczna^2*ceiling(K * 3/dS)^2)
+  
+  #europejska
+  wynik_niepewnosc = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = c(0.15, 0.25), bariera = bariera, amerykanska = a)
+  wynik = finite_diference_put(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = a)
+  
+  
+  #zrobilem funkcje, ktora zamienia wynik na df, nie wiem czy potrzeba
+  df_wynik <- to_df(wynik, dt)
+  df_wynik_niepewnosc <- to_df(wynik_niepewnosc, dt)
+  
+  
+  x = range(df_wynik_niepewnosc$S)
+  y = df_wynik_niepewnosc$option_value[df_wynik$t == 0]
+  g1 <- plot_ly(x = seq(x[1], x[2], length = length(y)), 
+                y =  y
+                , type = 'scatter', mode = 'lines+markers', name = paste('zmienna sigma, bariera ', bariera, sep =''))
+  g1 <- g1 %>% add_trace(y = df_wynik$option_value[df_wynik$t == 0] , name = 'stala sigma',
+                         mode = 'lines+markers',
+                         showlegend= FALSE) 
+  g1 <- g1 %>% layout(title = paste("Wartosci opcji AP@2150, bariera 1900-", bariera, ', bez dywidendy, w t=0 ', sep =''),
+                      xaxis = list(title = "S"),
+                      yaxis = list (range = c(0,700), title = "V"))  
+  return(g1)
+}
+
+g1 <- plotput(1900)
+g2 <- plotput(1800)
+g3 <- plotput(1700)
+g4 <- plotput(1600)
+
+sub <- subplot(g1, g2, g3, g4, nrows = 2)
+sub
+
+g1 <- plotput(1900,a = T)
+g2 <- plotput(1800,a = T)
+g3 <- plotput(1700,a = T)
+g4 <- plotput(1600,a = T)
+
+sub <- subplot(g1, g2, g3, g4, nrows = 2)
+sub
 
 #amerykanska
 
