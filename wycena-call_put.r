@@ -512,4 +512,30 @@ dywidenda_plot <- function(t = 0.4185, bar = 2400, dyw = 0.1, strike = 2150, kwo
   f1 <- subplot(g1,g2, nrows = 1)
   
   return(f1)
+}
+
+wynik = finite_diference_call(dS = dS, dt = dt, K = K, r = r, zmiennosc_roczna = zmiennosc_roczna, bariera = bariera, amerykanska = T)
+df_wynik1 <- to_df(wynik, dt)
+df_wynik <- to_df_dywidendy(wynik, dt, kwotowa = F, dywidenda = 0.3, kiedy = 0.415)
+
+dywid <- df_to_matrix(df_wynik)
+g1 <- plot_ly(
+              z = dywid) %>% add_surface()
+g1
+
+g2 <- plot_ly(z = wynik) %>% add_surface()
+
+plt <- subplot(g1,g2, nrows = 1)
+plt
+
+df_to_matrix <- function(df){
+  x <- sort(unique(df_wynik$t))
+  y <- sort(unique(df_wynik$S))
+  matrix <- matrix(nrow = length(y), ncol = length(x))
+  for(i in seq(1, length(x))){
+    for(j in seq(1, length(y))){
+      matrix[j,i] <- df$option_value[df$t == x[i] & df$S == y[j]]
+    }
   }
+  return(matrix)
+}
